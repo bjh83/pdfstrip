@@ -8,6 +8,7 @@ import(
 	"bufio"
 	"bytes"
 	"regexp"
+	"fmt"
 )
 
 func Decode(file *os.File) (io.ReadCloser, error) {
@@ -19,6 +20,7 @@ func Decode(file *os.File) (io.ReadCloser, error) {
 			return nil, err
 		}
 		if regex.Match(line) {
+			fmt.Println("broke")
 			break
 		}
 	}
@@ -31,18 +33,26 @@ func Decode(file *os.File) (io.ReadCloser, error) {
 			return nil, err
 		}
 		if regex.Match(line) {
+			fmt.Println("broke")
 			break
 		}
 		for _, val := range line {
 			byteList.PushBack(val)
 		}
 	}
-	bytebuffer := make([]byte, byteList.Len())
-	index := 0
+	toPrepend := []byte{31, 139, 8, 0, 0, 0, 0, 0, 0, 1, 67, 68, 69, 70, 71}
+	bytebuffer := make([]byte, byteList.Len() - 2 + len(toPrepend))
+	var index int
+	for index, val := range toPrepend {
+		bytebuffer[index] = val
+	}
+	byteList.Remove(byteList.Front())
+	byteList.Remove(byteList.Front())
 	for element := byteList.Front(); element != nil; element = element.Next() {
 		bytebuffer[index] = element.Value.(byte)
 		index++
 	}
+	fmt.Println(len(bytebuffer))
 	buffer := bytes.NewBuffer(bytebuffer)
 	return flate.NewReader(buffer), nil
 }
