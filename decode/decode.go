@@ -2,7 +2,6 @@ package decode
 
 import(
 	"compress/flate"
-	"os"
 	"io"
 	"bufio"
 	"bytes"
@@ -10,8 +9,8 @@ import(
 	"strconv"
 )
 
-func Decode(file *os.File) (io.ReadCloser, error) {
-	reader := bufio.NewReader(file)
+func Decode(toRead io.Reader) (io.ReadCloser, error) {
+	reader := bufio.NewReader(toRead)
 	regex, _ := regexp.Compile(".*/Length.*/Filter/FlateDecode.*")
 	var size int64
 	for {
@@ -20,9 +19,17 @@ func Decode(file *os.File) (io.ReadCloser, error) {
 			return nil, err
 		}
 		if regex.Match(line) {
-			regex, _ = regexp.Compile("[0-9]+")
-			number := regex.Find(line)
-			size, err = strconv.ParseInt(string(number), 10, 32)
+			lengthEx, _ := regexp.Compile("[0-9]+")
+			referenceEx, _ := regexp.Compile("[0-9]+ [0-9]+ R")
+			number := referenceEx.Find(line)
+			if number == nil {
+				number = lengthEx.Find(line)
+				size, err = strconv.ParseInt(string(number), 10, 32)
+			} else {
+				number = lengthEx.Find(number)
+				obj, err := strconv.ParseInt(string(number), 10, 32)
+				size = int64(findLength(int(obj), reader))
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -49,5 +56,25 @@ func Decode(file *os.File) (io.ReadCloser, error) {
 	}
 	buffer := bytes.NewBuffer(bytebuffer)
 	return flate.NewReader(buffer), nil
+}
+
+func findLength(obj int, toRead io.Reader) int {
+	reader := bufio.NewReader(toRead)
+	numString := strconv.Format(int64(obj), 10)
+	regex, _ := regexp.Compile(numString + " [0-9]+ obj")
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			return nil, err
+		}
+		if regex.Match(line) {
+			break
+		}
+	}
+	regex, _ = regexp.Compile("[0-9]+")
+	line, err := reader.ReadBytes('\n')
+	number := regex.Find(line)
+	toReturn, err := strconv.ParseInt(string(number), 10, 32)
+	return int(toReturn)
 }
 
