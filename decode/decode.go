@@ -64,7 +64,7 @@ End:
 
 func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	reader := bufio.NewReader(toRead)
-	lenStmtEx, _ := regexp.Compile("/Length.*")
+	lenStmtEx, _ := regexp.Compile("^(<<)?/Length.*")
 	filterEx, _ := regexp.Compile(".*/Filter ?/FlateDecode.*")
 	numberEx, _ := regexp.Compile("[0-9]+")
 	old := sizeTable != nil
@@ -77,14 +77,11 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 		if lenStmtEx.MatchString(line) {
 			rawSize := numberEx.FindString(line)
 			fmt.Print(line)
-			fmt.Println(rawSize)
 			size, err = strconv.ParseInt(rawSize, 10, 32)
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println(size)
 			if old {
-				fmt.Print("old")
 				size = sizeTable[size]
 			}
 			if size < 3 {
@@ -98,6 +95,7 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 				if !filterEx.MatchString(line) {
 					continue
 				}
+				fmt.Print(line)
 			}
 			break
 		}
@@ -161,7 +159,6 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 	}
 	readerList := list.New()
 	readerList.Init()
-	index := 0
 	for {
 		bytebuffer, err := findBlock(reader, sizeTable)
 		if err == io.EOF {
@@ -170,8 +167,6 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println(index)
-		index++
 		readerList.PushBack(flate.NewReader(bytes.NewBuffer(bytebuffer)))
 	}
 	readerArray := make([]io.Reader, readerList.Len())
