@@ -196,9 +196,13 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 }
 
 func stitch(readers []io.Reader) io.Reader {
+	if len(readers) == 0 {
+		return nil //XXX: I want to find something that just returns io.EOF
+	}
 	multi := readers[0]
 	for index := 1; index < len(readers); index++ {
 		multi = io.MultiReader(multi, readers[index])
 	}
 	return multi
 }
+
