@@ -10,6 +10,7 @@ import(
 	"strconv"
 	"errors"
 	"container/list"
+	"fmt"
 )
 
 const(
@@ -63,7 +64,7 @@ End:
 
 func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	reader := bufio.NewReader(toRead)
-	lenStmtEx, _ := regexp.Compile(".*/Length.*")
+	lenStmtEx, _ := regexp.Compile("/Length.*")
 	filterEx, _ := regexp.Compile(".*/Filter ?/FlateDecode.*")
 	numberEx, _ := regexp.Compile("[0-9]+")
 	old := sizeTable != nil
@@ -75,12 +76,19 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 		}
 		if lenStmtEx.MatchString(line) {
 			rawSize := numberEx.FindString(line)
-			size, err := strconv.ParseInt(rawSize, 10, 32)
+			fmt.Print(line)
+			fmt.Println(rawSize)
+			size, err = strconv.ParseInt(rawSize, 10, 32)
 			if err != nil {
 				return nil, err
 			}
+			fmt.Println(size)
 			if old {
+				fmt.Print("old")
 				size = sizeTable[size]
+			}
+			if size < 3 {
+				continue
 			}
 			if !filterEx.MatchString(line) {
 				line, err := reader.ReadString('\n')
