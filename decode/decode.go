@@ -10,7 +10,6 @@ import(
 	"strconv"
 	"errors"
 	"container/list"
-	"fmt"
 )
 
 const(
@@ -64,7 +63,7 @@ End:
 
 func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	reader := bufio.NewReader(toRead)
-	lenStmtEx, _ := regexp.Compile("^(<<)?/Length.*")
+	lenStmtEx, _ := regexp.Compile("^(<<)? ?/Length.*")
 	filterEx, _ := regexp.Compile(".*/Filter ?/FlateDecode.*")
 	numberEx, _ := regexp.Compile("[0-9]+")
 	arrowEx, _ := regexp.Compile(">>")
@@ -78,7 +77,6 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 		}
 		if lenStmtEx.MatchString(line) {
 			rawSize := numberEx.FindString(line)
-			fmt.Print(line)
 			size, err = strconv.ParseInt(rawSize, 10, 32)
 			if err != nil {
 				return nil, err
@@ -197,7 +195,7 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 
 func stitch(readers []io.Reader) io.Reader {
 	if len(readers) == 0 {
-		return nil //XXX: I want to find something that just returns io.EOF
+		return io.LimitReader(nil, 0) //XXX: I want to find something that just returns io.EOF
 	}
 	multi := readers[0]
 	for index := 1; index < len(readers); index++ {
