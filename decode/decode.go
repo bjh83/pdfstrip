@@ -108,6 +108,8 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	for index, val := range toPrepend {
 		bytebuffer[index] = val
 	}
+	reader.ReadByte()
+	reader.ReadByte()
 	for ;index < len(bytebuffer); index++ {
 		val, err := reader.ReadByte()
 		if err != nil {
@@ -159,6 +161,7 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 	}
 	readerList := list.New()
 	readerList.Init()
+	index := 0
 	for {
 		bytebuffer, err := findBlock(reader, sizeTable)
 		if err == io.EOF {
@@ -167,6 +170,8 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println(index)
+		index++
 		readerList.PushBack(flate.NewReader(bytes.NewBuffer(bytebuffer)))
 	}
 	readerArray := make([]io.Reader, readerList.Len())
