@@ -9,6 +9,7 @@ import(
 	"regexp"
 	"strconv"
 	"errors"
+	"container/list"
 )
 
 const(
@@ -17,16 +18,12 @@ const(
 
 var NotPDFErr error = errors.New("Does not match PDF specifications")
 
-func buildSizeTable(toRead io.ReadSeeker) (map[int64]int64, error) {
-	startpos, err := toRead.Seek(0, 1)
+func buildSizeTable(toRead io.Reader) (map[int64]int64, error) {
 	reader := bufio.NewReader(toRead)
 	sizeTable := make(map[int64]int64)
 	objAddressEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj\n")
 	isNumberEx, _ := regexp.Compile("[0-9]+\n")
 	numberEx, _ := regexp.Compile("[0-9]+")
-	if err != nil {
-		return nil, err
-	}
 	for {
 		var address int64
 		for {
@@ -39,7 +36,7 @@ func buildSizeTable(toRead io.ReadSeeker) (map[int64]int64, error) {
 			}
 			if objAddressEx.MatchString(line) {
 				rawAddress := numberEx.FindString(line)
-				address, err := strconv.ParseInt(rawAddress, 10, 32)
+				address, err = strconv.ParseInt(rawAddress, 10, 32)
 				if err != nil {
 					return nil, err
 				}
@@ -53,7 +50,7 @@ func buildSizeTable(toRead io.ReadSeeker) (map[int64]int64, error) {
 		if !isNumberEx.MatchString(line) {
 			continue
 		}
-		rawSize := numberEx.Find(line)
+		rawSize := numberEx.FindString(line)
 		size, err := strconv.ParseInt(rawSize, 10, 32)
 		if err != nil {
 			return nil, err
@@ -61,7 +58,6 @@ func buildSizeTable(toRead io.ReadSeeker) (map[int64]int64, error) {
 		sizeTable[address] = size
 	}
 End:
-	_, err = toRead.Seek(startpos, 0)
 	return sizeTable, nil
 }
 
@@ -118,17 +114,17 @@ func getVersion(toRead io.Reader) (float32, error) {
 	versionInfo := make([]byte, 9)
 	_, err := toRead.Read(versionInfo)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	regex, _ := regexp.Compile("%PDF-[0-9]+\\.[0-9]+")
 	if !regex.Match(versionInfo) {
-		return nil, NotPDFErr
+		return 0, NotPDFErr
 	}
 	regex, _ = regexp.Compile("[0-9]+\\.[0-9]+")
 	rawVersion := regex.Find(versionInfo)
 	version, err := strconv.ParseFloat(string(rawVersion), 32)
 	if err != nil {
-		return nil
+		return 0, err
 	}
 	return float32(version), nil
 }
@@ -139,24 +135,24 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 		return nil, err
 	}
 	var sizeTable map[int64]int64
-	var reader bufio.Reader
+	var reader io.Reader
 	if version < VersionConst {
 		bytebuffer, err := ioutil.ReadAll(toRead)
 		//I know this is not great but the alternatives are worse
 		// and I want this code to be generic
-		readerSeeker := bytes.Reader(bytebuffer)
-		sizeTable, err = buildSizeTable(readerSeeker)
+		buffer := bytes.NewBuffer(bytebuffer)
+		sizeTable, err = buildSizeTable(buffer)
 		if err != nil {
 			return nil, err
 		}
-		reader = bufio.NewReader(readerSeeker)
+		reader = bufio.NewReader(bytes.NewBuffer(bytebuffer))
 	} else {
 		reader = bufio.NewReader(toRead)
 	}
 	readerList := list.New()
 	readerList.Init()
 	for {
-		bytebuffer, err := findBlock(reader)
+		bytebuffer, err := findBlock(reader, sizeTable)
 		if err == io.EOF {
 			break
 		}
@@ -166,9 +162,16 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 		readerList.PushBack(flate.NewReader(bytes.NewBuffer(bytebuffer)))
 	}
 	readerArray := make([]io.Reader, readerList.Len())
-	for element, index := readerList.Front(), 0; element != nil; element = element.Next(), index++ {
+	for element, index := readerList.Front(), 0; element != nil; element, index = element.Next(), index + 1 {
 		readerArray[index] = element.Value.(io.Reader)
 	}
-	return MultiReader(readerArray)
+	return stitch(readerArray), nil
 }
 
+func stitch(readers []io.Reader) io.Reader {
+	multi := readers[0]
+	for index := 1; index < len(readers); index++ {
+		multi = io.MultiReader(multi, readers[index])
+	}
+	return multi
+}
