@@ -67,6 +67,8 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	lenStmtEx, _ := regexp.Compile("^(<<)?/Length.*")
 	filterEx, _ := regexp.Compile(".*/Filter ?/FlateDecode.*")
 	numberEx, _ := regexp.Compile("[0-9]+")
+	arrowEx, _ := regexp.Compile(">>")
+	streamEx, _ := regexp.Compile("stream")
 	old := sizeTable != nil
 	var size int64
 	for {
@@ -88,14 +90,31 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 				continue
 			}
 			if !filterEx.MatchString(line) {
-				line, err := reader.ReadString('\n')
+				line, err = reader.ReadString('\n')
 				if err != nil {
 					return nil, err
 				}
 				if !filterEx.MatchString(line) {
 					continue
 				}
-				fmt.Print(line)
+			}
+			if !arrowEx.MatchString(line) {
+				line, err = reader.ReadString('\n')
+				if err != nil {
+					return nil, err
+				}
+				if !arrowEx.MatchString(line) {
+					continue
+				}
+			}
+			if !streamEx.MatchString(line) {
+				line, err = reader.ReadString('\n')
+				if err != nil {
+					return nil, err
+				}
+				if !streamEx.MatchString(line) {
+					continue
+				}
 			}
 			break
 		}
