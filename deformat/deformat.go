@@ -8,12 +8,6 @@ import(
 	"strings"
 )
 
-const(
-	textLine = iota
-	coordLine = iota
-	other = iota
-)
-
 type Document struct {
 	Name string
 	Body []Page
@@ -37,32 +31,33 @@ func Deformat(toRead io.Reader) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		switch getLineType(line) {
-		case textLine:
+		textLine, coordLine := getLineType(line)
+		if coordLine {
+			currentPos = getXPos(line)
+		}
+		if textLine {
 			if currentPos < lastPos {
 				page += "\n"
 			}
 			lastPos = currentPos
-			page += stripText(line)
-		case coordLine:
-			currentPos = getXPos(line)
-		case other:
+			text := stripText(line)
+			page += text
 		}
 	}
 	return page, nil
 }
 
-func getLineType(line string) int {
-	text, _ := regexp.Compile("\\(\\.+\\)T[jJ]")
+func getLineType(line string) (bool, bool) {
+	text, _ := regexp.Compile("\\(.+\\)T[jJ]")
 	coord, _ := regexp.Compile("1 0 0 1 [0-9]+(\\.[0-9]+)? [0-9]+(\\.[0-9]+)?")
+	textLine, coordLine := false, false
 	if text.MatchString(line) {
-		return textLine
-	} else if coord.MatchString(line) {
-		return coordLine
-	} else {
-		return other
+		textLine = true
 	}
-	return other
+	if coord.MatchString(line) {
+		coordLine = true
+	}
+	return textLine, coordLine
 }
 
 func getXPos(line string) float32 {
@@ -80,7 +75,7 @@ func getCoordinateString(line string) string {
 }
 
 func stripText(line string) string {
-	regex, _ := regexp.Compile("\\(\\.+\\)T[jJ]")
+	regex, _ := regexp.Compile("\\(.+\\)T[jJ]")
 	text := regex.FindString(line)
 	text = text[1:len(text)-3]
 	return text

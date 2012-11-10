@@ -64,6 +64,7 @@ func main() {
 	}
 	writer := bufio.NewWriter(fileOut)
 	_, fileErr = writer.WriteString(newText)
+	fileErr = writer.Flush()
 	if fileErr != nil {
 		fmt.Println(fileErr.Error())
 		return
