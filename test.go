@@ -3,8 +3,10 @@ package main
 import(
 	"os"
 	"io"
+	"bufio"
 	"fmt"
 	"pdfstrip/decode"
+	"pdfstrip/deformat"
 )
 
 func main() {
@@ -42,6 +44,29 @@ func main() {
 		if num == 0 {
 			break
 		}
+	}
+	fileIn.Close()
+	fileOut.Close()
+	fileIn, fileErr = os.Open(os.Args[2])
+	if fileErr != nil {
+		fmt.Println(fileErr.Error())
+		return
+	}
+	fileOut, fileErr = os.Create("new_" + os.Args[2])
+	if fileErr != nil {
+		fmt.Println(fileErr.Error())
+		return
+	}
+	newText, fileErr := deformat.Deformat(fileIn)
+	if fileErr != nil {
+		fmt.Println(fileErr.Error())
+		return
+	}
+	writer := bufio.NewWriter(fileOut)
+	_, fileErr = writer.WriteString(newText)
+	if fileErr != nil {
+		fmt.Println(fileErr.Error())
+		return
 	}
 }
 
