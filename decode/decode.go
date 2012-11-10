@@ -13,7 +13,7 @@ import(
 )
 
 const(
-	VersionConst = 1.6
+	VersionConst = 1.5
 )
 
 var NotPDFErr error = errors.New("Does not match PDF specifications")
