@@ -18,6 +18,8 @@ const(
 
 var NotPDFErr error = errors.New("Does not match PDF specifications")
 
+var Dictionary []byte = []byte{31, 139, 8, 0, 0, 0, 0, 0, 0, 1, 67, 68, 69, 70, 71}
+
 func GetID(line string) (bool, int64) {
 	objAddressEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj")
 	numberEx, _ := regexp.Compile("[0-9]+")
@@ -137,10 +139,9 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error)
 			break
 		}
 	}
-	toPrepend := []byte{31, 139, 8, 0, 0, 0, 0, 0, 0, 1, 67, 68, 69, 70, 71}
-	bytebuffer := make([]byte, int(size) - 2 + len(toPrepend))
+	bytebuffer := make([]byte, int(size) - 2 + len(Dictionary))
 	var index int
-	for index, val := range toPrepend {
+	for index, val := range Dictionary {
 		bytebuffer[index] = val
 	}
 	reader.ReadByte()
