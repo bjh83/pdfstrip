@@ -193,8 +193,6 @@ func Decode(toRead io.Reader) (*FileData, error) {
 	} else {
 		reader = bufio.NewReader(toRead)
 	}
-	readerList := list.New()
-	readerList.Init()
 	for {
 		id, bytebuffer, err := findBlock(reader, sizeTable)
 		if err == io.EOF {
@@ -210,16 +208,5 @@ func Decode(toRead io.Reader) (*FileData, error) {
 		fileData.Append(id, string(bytebuffer))
 	}
 	return fileData, nil
-}
-
-func stitch(readers []io.Reader) io.Reader {
-	if len(readers) == 0 {
-		return io.LimitReader(nil, 0) //XXX: I want to find something that just returns io.EOF
-	}
-	multi := readers[0]
-	for index := 1; index < len(readers); index++ {
-		multi = io.MultiReader(multi, readers[index])
-	}
-	return multi
 }
 

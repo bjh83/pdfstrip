@@ -3,10 +3,12 @@ package deformat
 import(
 	"io"
 	"bufio"
+	"bytes"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf16"
+	"pdfstrip/decode"
 )
 
 type Document struct {
@@ -19,11 +21,11 @@ type Page struct {
 	Text string
 }
 
-func Deformat(toRead io.Reader) (string, error) {
+func Deformat(data []byte) (string, error) {
 	var page string
 	var currentPos float32
 	var lastPos float32
-	reader := bufio.NewReader(toRead)
+	reader := bufio.NewReader(bytes.NewBuffer(data))
 	for {
 		line, err := reader.ReadString('\n')
 		if err == io.EOF {

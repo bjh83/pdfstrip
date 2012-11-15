@@ -3,10 +3,10 @@ package main
 import(
 	"os"
 	"io"
-	"bufio"
 	"fmt"
 	"pdfstrip/decode"
 	"pdfstrip/deformat"
+	"encoding/xml"
 )
 
 func main() {
@@ -24,46 +24,33 @@ func main() {
 		fmt.Println(fileErr.Error())
 		return
 	}
-	reader, fileErr := decode.Decode(fileIn)
+	fileData, fileErr := decode.Decode(fileIn)
 	if fileErr != nil {
 		fmt.Println(fileErr.Error())
 		return
 	}
-	bytebuffer := make([]byte, 1024)
-	for {
-		num, fileErr := reader.Read(bytebuffer)
-		if fileErr != nil && fileErr != io.EOF {
-			fmt.Println(fileErr.Error())
-			return
-		}
-		_, fileErr = fileOut.Write(bytebuffer[:num])
-		if fileErr != nil {
-			fmt.Println(fileErr.Error())
-			return
-		}
-		if num == 0 {
-			break
-		}
+	byteBuffer, err := xml.MarshalIndent(fileData, "\t", "\t")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
 	}
+	_, fileErr = fileOut.Write(byteBuffer)
 	fileIn.Close()
 	fileOut.Close()
-	fileIn, fileErr = os.Open(os.Args[2])
-	if fileErr != nil {
-		fmt.Println(fileErr.Error())
-		return
-	}
 	fileOut, fileErr = os.Create("new_" + os.Args[2])
 	if fileErr != nil {
 		fmt.Println(fileErr.Error())
 		return
 	}
-	newText, fileErr := deformat.Deformat(fileIn)
-	if fileErr != nil {
-		fmt.Println(fileErr.Error())
+	for index, val := range fileData.Blocks {
+		fileData.Blocks[index], _ = deformat.Deformat(val.Text)
+	}
+	byteBuffer, err = xml.MarshalIndent(fileData, "\t", "\t")
+	if err != nil {
+		fmt.Println(err.Error())
 		return
 	}
-	writer := bufio.NewWriter(fileOut)
-	_, fileErr = writer.WriteString(newText)
+	_, fileErr = fileOut.Write(byteBuffer)
 	fileErr = writer.Flush()
 	if fileErr != nil {
 		fmt.Println(fileErr.Error())
