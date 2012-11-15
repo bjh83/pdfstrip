@@ -23,3 +23,11 @@ func (fileData *FileData) Append(id int, text string) {
 	}
 }
 
+func (fileData *FileData) GetMap() map[int]string {
+	newMap := make(map[int]string)
+	for _, val := range fileData.Blocks {
+		newMap[val.ID] = val.Text
+	}
+	return newMap
+}
+
