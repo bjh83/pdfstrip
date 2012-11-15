@@ -12,10 +12,14 @@ type FileData struct {
 }
 
 func New() *FileData {
-	return &FileData{make([]Block, 16)}
+	return &FileData{}
 }
 
 func (fileData *FileData) Append(id int, text string) {
-	fileData.Blocks = append(fileData.Blocks, Block{id, text})
+	if fileData.Blocks == nil {
+		fileData.Blocks = []Block{Block{id, text}}
+	} else {
+		fileData.Blocks = append(fileData.Blocks, Block{id, text})
+	}
 }
 

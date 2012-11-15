@@ -45,7 +45,7 @@ func Deformat(data []byte) (string, error) {
 			page += text
 		}
 	}
-	return page, nil
+	return clean(page), nil
 }
 
 func getLineType(line string) (bool, bool) {
@@ -80,5 +80,9 @@ func stripText(line string) string {
 	text := regex.FindString(line)
 	text = text[1:len(text)-3]
 	return text
+}
+
+func clean(line string) string {
+	return strings.Replace(line, string(0), "", -1)
 }
 

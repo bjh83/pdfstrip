@@ -28,7 +28,7 @@ func main() {
 		fmt.Println(fileErr.Error())
 		return
 	}
-	byteBuffer, err := xml.MarshalIndent(fileData, "\t", "\t")
+	byteBuffer, err := xml.Marshal(fileData)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -44,7 +44,7 @@ func main() {
 	for index, val := range fileData.Blocks {
 		fileData.Blocks[index].Text, _ = deformat.Deformat([]byte(val.Text))
 	}
-	byteBuffer, err = xml.MarshalIndent(fileData, "\t", "\t")
+	byteBuffer, err = xml.Marshal(fileData)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
