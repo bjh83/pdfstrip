@@ -92,11 +92,10 @@ End:
 	return sizeTable, nil
 }
 
-func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error) {
+func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Regexp) (int, []byte, error) {
 	reader := bufio.NewReader(toRead)
 	openEx, _ := regexp.Compile("<<")
 	closeEx, _ := regexp.Compile(">>")
-	headerEx, _ := regexp.Compile("<</Length [0-9]+( [0-9]+ R)?/Filter ?/FlateDecode>>")
 	streamEx, _ := regexp.Compile("stream")
 	var size int64
 	var id int64
@@ -196,8 +195,9 @@ func Decode(toRead io.Reader) (*FileData, error) {
 	} else {
 		reader = bufio.NewReader(toRead)
 	}
+	headerEx, _ := regexp.Compile("<</Length [0-9]+( [0-9]+ R)?/Filter ?/FlateDecode>>")
 	for {
-		id, bytebuffer, err := findBlock(reader, sizeTable)
+		id, bytebuffer, err := findBlock(reader, sizeTable, headerEx)
 		if err == io.EOF {
 			break
 		}
@@ -211,5 +211,27 @@ func Decode(toRead io.Reader) (*FileData, error) {
 		fileData.Append(id, string(bytebuffer))
 	}
 	return fileData, nil
+}
+
+func uncompress(stream []byte) (string, error) {
+	uncompressed, err := ioutil.ReadAll(flate.NewReader(bytes.NewBuffer(stream)))
+	if err != nil {
+		return "", err
+	}
+	return string(uncompressed), nil
+}
+
+func GetXRef(toRead io.Reader) (Block, error) {
+	headerEx, _ := regexp.Compile("<</Type/XRef.*/Root [0-9]+ [0-9]+ R/.*/Length [0-9]+( [0-9]+ R)?/.*/Filter/FlateDecode>>")
+	reader := bufio.NewReader(toRead)
+	id, data, err := findBlock(reader, nil, headerEx)
+	if err != nil {
+		return Block{}, err
+	}
+	text, err := uncompress(data)
+	if err != nil {
+		return Block{}, err
+	}
+	return Block{id, text}, nil
 }
 
