@@ -8,6 +8,7 @@ import(
 	"bytes"
 	"regexp"
 	"strconv"
+	"strings"
 	"errors"
 	"container/list"
 )
@@ -18,14 +19,46 @@ const(
 
 var NotPDFErr error = errors.New("Does not match PDF specifications")
 
+func getID(line string) (bool, int64) {
+	objAddressEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj")
+	numberEx, _ := regexp.Compile("[0-9]+")
+	line = objAddressEx.FindString(line)
+	if line == "" {
+		return false, 0
+	}
+	rawNumber := numberEx.FindString(line)
+	address, err := strconv.ParseInt(rawNumber, 10, 64)
+	if err != nil {
+		return false, 0
+	}
+	return true, address
+}
+
+func getLength(line string, sizeTable map[int64]int64) (bool, int64) {
+	lengthEx, _ := regexp.Compile("/Length [0-9]+( [0-9]+ R)?")
+	addressEx, _ := regexp.Compile("/Length [0-9]+ [0-9]+ R")
+	numberEx, _ := regexp.Compile("[0-9]+")
+	line = lengthEx.FindString(line)
+	if line == "" {
+		return false, 0
+	}
+	rawNumber := numberEx.FindString(line)
+	size, err := strconv.ParseInt(rawNumber, 10, 64)
+	if err != nil {
+		return false, 0
+	}
+	if addressEx.MatchString(line) {
+		return true, sizeTable[size]
+	}
+	return true, size
+}
+
 func buildSizeTable(toRead io.Reader) (map[int64]int64, error) {
 	reader := bufio.NewReader(toRead)
 	sizeTable := make(map[int64]int64)
-	objAddressEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj\n")
-	isNumberEx, _ := regexp.Compile("[0-9]+\n")
 	numberEx, _ := regexp.Compile("[0-9]+")
+	var address int64
 	for {
-		var address int64
 		for {
 			line, err := reader.ReadString('\n')
 			if err == io.EOF {
@@ -34,12 +67,9 @@ func buildSizeTable(toRead io.Reader) (map[int64]int64, error) {
 			if err != nil {
 				return nil, err
 			}
-			if objAddressEx.MatchString(line) {
-				rawAddress := numberEx.FindString(line)
-				address, err = strconv.ParseInt(rawAddress, 10, 32)
-				if err != nil {
-					return nil, err
-				}
+			isAddress := false
+			isAddress, address = getID(line)
+			if isAddress {
 				break
 			}
 		}
@@ -47,13 +77,13 @@ func buildSizeTable(toRead io.Reader) (map[int64]int64, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !isNumberEx.MatchString(line) {
+		if !numberEx.MatchString(line) {
 			continue
 		}
 		rawSize := numberEx.FindString(line)
 		size, err := strconv.ParseInt(rawSize, 10, 32)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		sizeTable[address] = size
 	}
@@ -61,54 +91,42 @@ End:
 	return sizeTable, nil
 }
 
-func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
+func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error) {
 	reader := bufio.NewReader(toRead)
-	lenStmtEx, _ := regexp.Compile("^(<<)? ?/Length.*")
-	filterEx, _ := regexp.Compile(".*/Filter ?/FlateDecode.*")
-	numberEx, _ := regexp.Compile("[0-9]+")
-	arrowEx, _ := regexp.Compile(">>")
+	openEx, _ := regexp.Compile("<<")
+	closeEx, _ := regexp.Compile(">>")
+	headerEx, _ := regexp.Compile("<</Length [0-9]+( [0-9]+ R)?/Filter ?/FlateDecode>>")
 	streamEx, _ := regexp.Compile("stream")
-	old := sizeTable != nil
 	var size int64
+	var id int64
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, err
+			return -1, nil, err
 		}
-		if lenStmtEx.MatchString(line) {
-			rawSize := numberEx.FindString(line)
-			size, err = strconv.ParseInt(rawSize, 10, 32)
-			if err != nil {
-				return nil, err
+		_, id = getID(line)
+		if openEx.MatchString(line) {
+			buffer := line
+			for !closeEx.MatchString(buffer) {
+				line, err = reader.ReadString('\n')
+				if err != nil {
+					return -1, nil, err
+				}
+				buffer += line
 			}
-			if old {
-				size = sizeTable[size]
-			}
-			if size < 3 {
+			buffer = strings.Replace(buffer, "\n", "", -1)
+			if !headerEx.MatchString(buffer) {
 				continue
 			}
-			if !filterEx.MatchString(line) {
-				line, err = reader.ReadString('\n')
-				if err != nil {
-					return nil, err
-				}
-				if !filterEx.MatchString(line) {
-					continue
-				}
+			hasSize := false
+			hasSize, size = getLength(buffer, sizeTable)
+			if !hasSize {
+				continue
 			}
-			if !arrowEx.MatchString(line) {
+			if !streamEx.MatchString(buffer) {
 				line, err = reader.ReadString('\n')
 				if err != nil {
-					return nil, err
-				}
-				if !arrowEx.MatchString(line) {
-					continue
-				}
-			}
-			if !streamEx.MatchString(line) {
-				line, err = reader.ReadString('\n')
-				if err != nil {
-					return nil, err
+					return -1, nil, err
 				}
 				if !streamEx.MatchString(line) {
 					continue
@@ -128,11 +146,11 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) ([]byte, error) {
 	for ;index < len(bytebuffer); index++ {
 		val, err := reader.ReadByte()
 		if err != nil {
-			return nil, err
+			return -1, nil, err
 		}
 		bytebuffer[index] = val
 	}
-	return bytebuffer, nil
+	return int(id), bytebuffer, nil
 }
 
 func getVersion(toRead io.Reader) (float32, error) {
@@ -154,13 +172,14 @@ func getVersion(toRead io.Reader) (float32, error) {
 	return float32(version), nil
 }
 
-func Decode(toRead io.Reader) (io.Reader, error) {
+func Decode(toRead io.Reader) (*FileData, error) {
 	version, err := getVersion(toRead)
 	if err != nil {
 		return nil, err
 	}
 	var sizeTable map[int64]int64
 	var reader io.Reader
+	fileData := New()
 	if version < VersionConst {
 		bytebuffer, err := ioutil.ReadAll(toRead)
 		//I know this is not great but the alternatives are worse
@@ -177,20 +196,20 @@ func Decode(toRead io.Reader) (io.Reader, error) {
 	readerList := list.New()
 	readerList.Init()
 	for {
-		bytebuffer, err := findBlock(reader, sizeTable)
+		id, bytebuffer, err := findBlock(reader, sizeTable)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return nil, err
 		}
-		readerList.PushBack(flate.NewReader(bytes.NewBuffer(bytebuffer)))
+		bytebuffer, err = ioutil.ReadAll(flate.NewReader(bytes.NewBuffer(bytebuffer)))
+		if err != nil {
+			return nil, err
+		}
+		fileData.Append(id, string(bytebuffer))
 	}
-	readerArray := make([]io.Reader, readerList.Len())
-	for element, index := readerList.Front(), 0; element != nil; element, index = element.Next(), index + 1 {
-		readerArray[index] = element.Value.(io.Reader)
-	}
-	return stitch(readerArray), nil
+	return fileData, nil
 }
 
 func stitch(readers []io.Reader) io.Reader {
