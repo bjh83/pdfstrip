@@ -18,7 +18,7 @@ const(
 
 var NotPDFErr error = errors.New("Does not match PDF specifications")
 
-func getID(line string) (bool, int64) {
+func GetID(line string) (bool, int64) {
 	objAddressEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj")
 	numberEx, _ := regexp.Compile("[0-9]+")
 	line = objAddressEx.FindString(line)
@@ -33,7 +33,7 @@ func getID(line string) (bool, int64) {
 	return true, address
 }
 
-func getLength(line string, sizeTable map[int64]int64) (bool, int64) {
+func GetLength(line string, sizeTable map[int64]int64) (bool, int64) {
 	lengthEx, _ := regexp.Compile("/Length [0-9]+( [0-9]+ R)?")
 	addressEx, _ := regexp.Compile("/Length [0-9]+ [0-9]+ R")
 	numberEx, _ := regexp.Compile("[0-9]+")
@@ -67,7 +67,7 @@ func buildSizeTable(toRead io.Reader) (map[int64]int64, error) {
 				return nil, err
 			}
 			isAddress := false
-			isAddress, address = getID(line)
+			isAddress, address = GetID(line)
 			if isAddress {
 				break
 			}
@@ -103,7 +103,7 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error)
 		if err != nil {
 			return -1, nil, err
 		}
-		hasId, newId := getID(line)
+		hasId, newId := GetID(line)
 		if hasId {
 			id = newId
 		}
@@ -121,7 +121,7 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error)
 				continue
 			}
 			hasSize := false
-			hasSize, size = getLength(buffer, sizeTable)
+			hasSize, size = GetLength(buffer, sizeTable)
 			if !hasSize {
 				continue
 			}
