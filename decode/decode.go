@@ -10,7 +10,6 @@ import(
 	"strconv"
 	"strings"
 	"errors"
-	"container/list"
 )
 
 const(

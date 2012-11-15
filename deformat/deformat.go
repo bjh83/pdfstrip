@@ -7,8 +7,6 @@ import(
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf16"
-	"pdfstrip/decode"
 )
 
 type Document struct {
@@ -82,13 +80,5 @@ func stripText(line string) string {
 	text := regex.FindString(line)
 	text = text[1:len(text)-3]
 	return text
-}
-
-func decode(stream []byte) []rune {
-	out := make([]rune, len(stream) / 2)
-	for i := 1; i < len(stream); i += 2 {
-		out[i / 2] = utf16.DecodeRune(rune(stream[i - 1]), rune(stream[i]))
-	}
-	return out
 }
 

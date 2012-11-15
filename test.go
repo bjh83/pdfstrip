@@ -2,7 +2,6 @@ package main
 
 import(
 	"os"
-	"io"
 	"fmt"
 	"pdfstrip/decode"
 	"pdfstrip/deformat"
@@ -43,7 +42,7 @@ func main() {
 		return
 	}
 	for index, val := range fileData.Blocks {
-		fileData.Blocks[index], _ = deformat.Deformat(val.Text)
+		fileData.Blocks[index].Text, _ = deformat.Deformat([]byte(val.Text))
 	}
 	byteBuffer, err = xml.MarshalIndent(fileData, "\t", "\t")
 	if err != nil {
@@ -51,7 +50,6 @@ func main() {
 		return
 	}
 	_, fileErr = fileOut.Write(byteBuffer)
-	fileErr = writer.Flush()
 	if fileErr != nil {
 		fmt.Println(fileErr.Error())
 		return
