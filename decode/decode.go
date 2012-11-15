@@ -103,7 +103,10 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64) (int, []byte, error)
 		if err != nil {
 			return -1, nil, err
 		}
-		_, id = getID(line)
+		hasId, newId := getID(line)
+		if hasId {
+			id = newId
+		}
 		if openEx.MatchString(line) {
 			buffer := line
 			for !closeEx.MatchString(buffer) {
