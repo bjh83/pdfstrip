@@ -92,17 +92,18 @@ End:
 	return sizeTable, nil
 }
 
-func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Regexp) (int, []byte, error) {
+func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Regexp) (int, []byte, string, error) {
 	reader := bufio.NewReader(toRead)
 	openEx, _ := regexp.Compile("<<")
 	closeEx, _ := regexp.Compile(">>")
 	streamEx, _ := regexp.Compile("stream")
 	var size int64
 	var id int64
+	var header string
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			return -1, nil, err
+			return -1, nil, "", err
 		}
 		hasId, newId := GetID(line)
 		if hasId {
@@ -113,7 +114,7 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Reg
 			for !closeEx.MatchString(buffer) {
 				line, err = reader.ReadString('\n')
 				if err != nil {
-					return -1, nil, err
+					return -1, nil, "", err
 				}
 				buffer += line
 			}
@@ -129,13 +130,14 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Reg
 			if !streamEx.MatchString(buffer) {
 				line, err = reader.ReadString('\n')
 				if err != nil {
-					return -1, nil, err
+					return -1, nil, "", err
 				}
 				if !streamEx.MatchString(line) {
 					continue
 				}
 			}
 			break
+			header = buffer
 		}
 	}
 	bytebuffer := make([]byte, int(size) - 2 + len(Dictionary))
@@ -148,11 +150,11 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Reg
 	for ;index < len(bytebuffer); index++ {
 		val, err := reader.ReadByte()
 		if err != nil {
-			return -1, nil, err
+			return -1, nil, "",  err
 		}
 		bytebuffer[index] = val
 	}
-	return int(id), bytebuffer, nil
+	return int(id), bytebuffer, header, nil
 }
 
 func getVersion(toRead io.Reader) (float32, error) {
@@ -197,7 +199,7 @@ func Decode(toRead io.Reader) (*FileData, error) {
 	}
 	headerEx, _ := regexp.Compile("<</Length [0-9]+( [0-9]+ R)?/Filter ?/FlateDecode>>")
 	for {
-		id, bytebuffer, err := findBlock(reader, sizeTable, headerEx)
+		id, bytebuffer, _, err := findBlock(reader, sizeTable, headerEx)
 		if err == io.EOF {
 			break
 		}
@@ -213,25 +215,56 @@ func Decode(toRead io.Reader) (*FileData, error) {
 	return fileData, nil
 }
 
-func uncompress(stream []byte) (string, error) {
+func uncompress(stream []byte) ([]byte, error) {
 	uncompressed, err := ioutil.ReadAll(flate.NewReader(bytes.NewBuffer(stream)))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(uncompressed), nil
+	return uncompressed, nil
 }
 
-func GetXRef(toRead io.Reader) (Block, error) {
-	headerEx, _ := regexp.Compile("<</Type/XRef.*/Root [0-9]+ [0-9]+ R/.*/Length [0-9]+( [0-9]+ R)?/.*/Filter/FlateDecode>>")
+func GetXRef(toRead io.Reader) (*XRefBlock, error) {
+	headerEx, _ := regexp.Compile("<</Type/XRef/W\\[[0-9] [0-9] [0-9]\\]/Root [0-9]+ [0-9]+ R/Index\\[[0-9]+ [0-9]+\\]/.*/Length [0-9]+( [0-9]+ R)?/.*/Filter/FlateDecode>>")
+	byteWidthEx, _ := regexp.Compile("W\\[[0-9] [0-9] [0-9]\\]")
+	indexEx, _ := regexp.Compile("Index\\[[0-9]+ [0-9]+\\]")
+	numberEx, _ := regexp.Compile("[0-9]")
 	reader := bufio.NewReader(toRead)
-	id, data, err := findBlock(reader, nil, headerEx)
+	id, data, header, err := findBlock(reader, nil, headerEx)
 	if err != nil {
-		return Block{}, err
+		return nil, err
 	}
 	text, err := uncompress(data)
 	if err != nil {
-		return Block{}, err
+		return nil, err
 	}
-	return Block{id, text}, nil
+	rawByteWidth := byteWidthEx.FindString(header)
+	rawByteWidths := numberEx.FindAllString(rawByteWidth, 3)
+	state, err := strconv.ParseUint(rawByteWidths[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	offset, err := strconv.ParseUint(rawByteWidths[1], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	index, err := strconv.ParseUint(rawByteWidths[2], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	xRef := BuildXRef(int(state), int(offset), int(index), text)
+	xRef.ID = id
+	rawIndexInfo := indexEx.FindString(header)
+	rawIndicies := numberEx.FindAllString(rawIndexInfo, 2)
+	minIndex, err := strconv.ParseInt(rawIndicies[0], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	maxIndex, err := strconv.ParseInt(rawIndicies[1], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	xRef.MinIndex = int(minIndex)
+	xRef.MaxIndex = int(maxIndex)
+	return xRef, nil
 }
 

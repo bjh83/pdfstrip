@@ -53,7 +53,7 @@ func BuildXRef(stateWidth, offsetWidth, indexWidth int, data []byte) *XRefBlock 
 
 type XRefBlock struct {
 	ID int
-	IndexMin, IndexMax int
+	MinIndex, MaxIndex int
 	Trips []Trip
 }
 
