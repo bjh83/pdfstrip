@@ -227,7 +227,7 @@ func GetXRef(toRead io.Reader) (*XRefBlock, error) {
 	headerEx, _ := regexp.Compile("<</Type/XRef/.*/Filter/FlateDecode>>")
 	byteWidthEx, _ := regexp.Compile("W\\[[0-9] [0-9] [0-9]\\]")
 	indexEx, _ := regexp.Compile("Index\\[[0-9]+ [0-9]+\\]")
-	numberEx, _ := regexp.Compile("[0-9]")
+	numberEx, _ := regexp.Compile("[0-9]+")
 	reader := bufio.NewReader(toRead)
 	id, data, header, err := findBlock(reader, nil, headerEx)
 	if err != nil {
