@@ -1,6 +1,8 @@
 package decode
 
-import()
+import(
+	"encoding/binary"
+)
 
 type Block struct {
 	ID int
@@ -9,6 +11,7 @@ type Block struct {
 
 type FileData struct {
 	Blocks []Block
+	XRef XRefBlock
 }
 
 func New() *FileData {
@@ -29,5 +32,32 @@ func (fileData *FileData) GetMap() map[int]string {
 		newMap[val.ID] = val.Text
 	}
 	return newMap
+}
+
+func BuildXRef(stateWidth, offsetWidth, indexWidth int, data []byte) *XRefBlock {
+	totalWidth := stateWidth + offsetWidth + indexWidth
+	xRef := new(XRefBlock)
+	xRef.Trips = make([]Trip, 0, 32)
+	for index := totalWidth - 1; index < len(data); index += totalWidth {
+		stateSlice := data[index - totalWidth : index - offsetWidth - indexWidth]
+		offsetSlice := data[index - offsetWidth - indexWidth : index - indexWidth]
+		indexSlice := data[index - indexWidth : index + 1]
+		state, _ := binary.Uvarint(stateSlice)
+		offset, _ := binary.Uvarint(offsetSlice)
+		xIndex, _ := binary.Uvarint(indexSlice)
+		trip := Trip{state, offset, xIndex}
+		xRef.Trips = append(xRef.Trips, trip)
+	}
+	return xRef
+}
+
+type XRefBlock struct {
+	ID int
+	IndexMin, IndexMax int
+	Trips []Trip
+}
+
+type Trip struct {
+	State, Offset, Index uint64
 }
 
