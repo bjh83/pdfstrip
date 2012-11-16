@@ -136,8 +136,8 @@ func findBlock(toRead io.Reader, sizeTable map[int64]int64, headerEx *regexp.Reg
 					continue
 				}
 			}
-			break
 			header = buffer
+			break
 		}
 	}
 	bytebuffer := make([]byte, int(size) - 2 + len(Dictionary))
@@ -224,7 +224,7 @@ func uncompress(stream []byte) ([]byte, error) {
 }
 
 func GetXRef(toRead io.Reader) (*XRefBlock, error) {
-	headerEx, _ := regexp.Compile("<</Type/XRef/W\\[[0-9] [0-9] [0-9]\\]/Root [0-9]+ [0-9]+ R/Index\\[[0-9]+ [0-9]+\\]/.*/Length [0-9]+( [0-9]+ R)?/.*/Filter/FlateDecode>>")
+	headerEx, _ := regexp.Compile("<</Type/XRef/.*/Filter/FlateDecode>>")
 	byteWidthEx, _ := regexp.Compile("W\\[[0-9] [0-9] [0-9]\\]")
 	indexEx, _ := regexp.Compile("Index\\[[0-9]+ [0-9]+\\]")
 	numberEx, _ := regexp.Compile("[0-9]")

@@ -1,7 +1,6 @@
 package decode
 
 import(
-	"encoding/binary"
 )
 
 type Block struct {
@@ -34,17 +33,26 @@ func (fileData *FileData) GetMap() map[int]string {
 	return newMap
 }
 
+func Uint64(stream []byte) uint64 {
+	var out uint64
+	for _, val := range stream {
+		out *= 256
+		out += uint64(val)
+	}
+	return out
+}
+
 func BuildXRef(stateWidth, offsetWidth, indexWidth int, data []byte) *XRefBlock {
 	totalWidth := stateWidth + offsetWidth + indexWidth
 	xRef := new(XRefBlock)
 	xRef.Trips = make([]Trip, 0, 32)
-	for index := totalWidth - 1; index < len(data); index += totalWidth {
-		stateSlice := data[index - totalWidth : index - offsetWidth - indexWidth]
-		offsetSlice := data[index - offsetWidth - indexWidth : index - indexWidth]
-		indexSlice := data[index - indexWidth : index + 1]
-		state, _ := binary.Uvarint(stateSlice)
-		offset, _ := binary.Uvarint(offsetSlice)
-		xIndex, _ := binary.Uvarint(indexSlice)
+	for index := 0; index + totalWidth < len(data); index += totalWidth {
+		stateSlice := data[index : index + stateWidth]
+		offsetSlice := data[index + stateWidth : index + stateWidth + offsetWidth]
+		indexSlice := data[index + stateWidth + offsetWidth : index + totalWidth]
+		state := Uint64(stateSlice)
+		offset := Uint64(offsetSlice)
+		xIndex := Uint64(indexSlice)
 		trip := Trip{state, offset, xIndex}
 		xRef.Trips = append(xRef.Trips, trip)
 	}
