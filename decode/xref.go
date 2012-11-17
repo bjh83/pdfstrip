@@ -10,6 +10,7 @@ import(
 )
 
 var UnrecognizedFormat error = errors.New("Does not match known format")
+var XRefError error = errors.New("Did not find expected object")
 
 func Uncompress(stream []byte) ([]byte, error) {
 	stream = append(Dictionary, stream...)
@@ -36,6 +37,37 @@ func getLength(line string) (bool, int64) {
 	return true, getInt64(length)
 }
 
+func getLengthByID(id int, file io.ReadSeeker, xRef *XRefBlock) (int64, error) {
+	length, hasLength := lengthHash[id]
+	if hasLength {
+		return length, nil
+	}
+	saveOffset, err := file.Seek(0, 1)
+	if err != nil {
+		return -1, err
+	}
+	newOffset := xRef.GetOffset(id)
+	_, err := file.Seek(newOffset, 0)
+	_, err := util.ReadLine(file)
+	rawLength := util.Readline(file)
+	_, err := file.Seek(saveOffset, 0)
+	return getInt64(rawLength), nil
+}
+
+func getLength(line string, file io.ReadSeeker, xRef *XRefBlock) (bool, int64) {
+	lengthEx, _ := regexp.Compile("/Length [0-9]+ [0-9]+ R")
+	rawLength := lengthEx.FindString(line)
+	if rawLength == "" {
+		return getLength(line)
+	}
+	id := getInt64(rawLength)
+	length, err := getLengthByID(id, file, xRef)
+	if err != nil {
+		return false, -1
+	}
+	return true, length
+}
+
 func getID(line string) (bool, int64) {
 	idEx, _ := regexp.Compile("[0-9]+ [0-9]+ obj")
 	rawID := idEx.FindString(line)
@@ -43,6 +75,30 @@ func getID(line string) (bool, int64) {
 		return false, -1
 	}
 	return true, getInt64(rawID)
+}
+
+func findBlock(file io.ReadSeeker, id int64, xRef *XRefBlock) (string, []byte, error) {
+	offset := xRef.GetOffset(id)
+	_, err := file.Seek(offset, 0)
+	if err != nil {
+		return "", nil, err
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", nil, err
+	}
+	hasID, toCompare := getID(line)
+	if !hasID || toCompare != id {
+		return nil, XRefError
+	}
+	header := util.GetHeader(file)
+	length := getLength(header, xRef)
+	buffer := make([]byte, length)
+	_, err := file.Read(buffer)
+	if err != nil {
+		return "", nil, err
+	}
+	return header, buffer, nil
 }
 
 func findXRef(reader bufio.Reader) (int, []byte, string, error) {

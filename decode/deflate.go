@@ -63,9 +63,35 @@ type XRefBlock struct {
 	ID int
 	MinIndex, MaxIndex int
 	Trips []Trip
+	ExtendedTable map[int64][]byte
+}
+
+func (xRef *XRefBlock) BuildXTable(file io.ReadSeeker) {
+	xRef.ExtendedTable = make(map[int64]byte)
+	for _, val := range xRef.Trips {
+		if val.State == 2 {
+			_, inMap = xRef.ExtendedTable[val.Offset]
+			if !inMap {
+				data, err := findBlock(file, val.Offset, xRef)
+				data, err = Uncompress(data)
+				xRef.ExtendedTable[val.Offset] = data
+			}
+		}
+	}
+}
+
+func (xRef *XRefBlock) GetOffset(id int64) {
+	return xRef.Trips[id].Offset
 }
 
 type Trip struct {
 	State, Offset, Index uint64
+}
+
+type RootBlock struct {
+	TreeRoot, Outline int
+	Lang string
+	Metadata, Pages int
+	PageLabels []string
 }
 
